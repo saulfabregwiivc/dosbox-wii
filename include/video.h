@@ -82,3 +82,4 @@ void GFX_CaptureMouse(void);
 extern bool mouselocked; //true if mouse is confined to window
 
 #endif
+

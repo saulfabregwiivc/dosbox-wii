@@ -103,4 +103,10 @@ extern const u32	player3_point_png_size;
 extern const u8		player4_point_png[];
 extern const u32	player4_point_png_size;
 
+extern const u8		tv_png[];
+extern const u32	tv_png_size;
+
+extern const u8		tv_over_png[];
+extern const u32	tv_over_png_size;
+
 #endif

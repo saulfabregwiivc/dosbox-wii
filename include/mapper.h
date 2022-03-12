@@ -1,5 +1,5 @@
  /*
- *  Copyright (C) 2002-2011  The DOSBox Team
+ *  Copyright (C) 2002-2015  The DOSBox Team
  *
  *  This program is free software; you can redistribute it and/or modify
  *  it under the terms of the GNU General Public License as published by
@@ -30,9 +30,8 @@ void MAPPER_AddHandler(MAPPER_Handler * handler,MapKeys key,Bitu mods,char const
 void MAPPER_Init(void);
 void MAPPER_StartUp(Section * sec);
 void MAPPER_Run(bool pressed);
-void MAPPER_RunInternal();
+extern void MAPPER_RunInternal();
 void MAPPER_LosingFocus(void);
-
 
 #define MMOD1 0x1
 #define MMOD2 0x2

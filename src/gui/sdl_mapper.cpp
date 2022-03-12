@@ -392,7 +392,6 @@ static SDLKey sdlkey_map[MAX_SCANCODES]={SDLK_UNKNOWN,SDLK_ESCAPE,
 
 #undef Z
 
-
 SDLKey MapSDLCode(Bitu skey) {
 	if (usescancodes) {
 		if (skey<MAX_SCANCODES) return sdlkey_map[skey];
@@ -449,7 +448,6 @@ Bitu GetKeyCode(SDL_keysym keysym) {
 		return (Bitu)keysym.sym;
 	}
 }
-
 
 class CKeyBind;
 class CKeyBindGroup;
@@ -526,7 +524,6 @@ static struct {
 	Bit16s axis_pos[8];
 	bool hat_pressed[16];
 } virtual_joysticks[2];
-
 
 class CJAxisBind;
 class CJButtonBind;
@@ -636,6 +633,7 @@ public:
 		JOYSTICK_Enable(emustick,true);
 
 		sdl_joystick=SDL_JoystickOpen(_stick);
+
 		if (sdl_joystick==NULL) {
 			button_wrap=emulated_buttons;
 			return;
@@ -710,7 +708,6 @@ public:
 		SDL_JoyAxisEvent * jaxis = NULL;
 		SDL_JoyButtonEvent * jbutton = NULL;
 		Bitu but = 0;
-
 		switch(event->type) {
 			case SDL_JOYAXISMOTION:
 				jaxis = &event->jaxis;
@@ -1531,7 +1528,6 @@ protected:
 	Bitu stick,hat,dir;
 };
 
-
 class CModEvent : public CTriggeredEvent {
 public:
 	CModEvent(char const * const _entry,Bitu _wmod) : CTriggeredEvent(_entry) {
@@ -1617,12 +1613,10 @@ static struct {
 	CCheckButton * mod1,* mod2,* mod3,* hold;
 } bind_but;
 
-
 static void change_action_text(const char* text,Bit8u col) {
 	bind_but.action->Change(text,"");
 	bind_but.action->SetColor(col);
 }
-
 
 static void SetActiveBind(CBind * _bind) {
 	mapper.abind=_bind;
@@ -1931,9 +1925,7 @@ static void CreateLayout(void) {
 		new CTextButton(PX(XO+4),PY(YO-1),3*BW,20,"Disabled");
 		new CTextButton(PX(XO+8),PY(YO-1),3*BW,20,"Disabled");
 	}
-   
-   
-   
+       
 	/* The modifier buttons */
 	AddModButton(PX(0),PY(14),50,20,"Mod1",1);
 	AddModButton(PX(2),PY(14),50,20,"Mod2",2);
@@ -2206,7 +2198,11 @@ static void InitializeJoysticks(void) {
 					SDL_JoystickClose(tmp_stick1);
 				}
 				bool second_usable=false;
+#ifdef HW_RVL
+				SDL_Joystick* tmp_stick2=SDL_JoystickOpen(4);
+#else
 				SDL_Joystick* tmp_stick2=SDL_JoystickOpen(1);
+#endif
 				if (tmp_stick2) {
 					if ((SDL_JoystickNumAxes(tmp_stick2)>1) || (SDL_JoystickNumButtons(tmp_stick2)>0)) {
 						second_usable=true;
@@ -2268,8 +2264,13 @@ static void CreateBindGroups(void) {
 			new CStickBindGroup(joyno,joyno+1U,true);
 			break;
 		case JOY_FCS:
+#ifdef HW_RVL
+			mapper.sticks.stick[mapper.sticks.num_groups++]=new CFCSBindGroup(0,joyno);
+			mapper.sticks.stick[mapper.sticks.num_groups++]=new CFCSBindGroup(4,joyno+1U);
+#else
 			mapper.sticks.stick[mapper.sticks.num_groups++]=new CFCSBindGroup(joyno,joyno);
 			new CStickBindGroup(joyno+1U,joyno+1U,true);
+#endif
 			break;
 		case JOY_CH:
 			mapper.sticks.stick[mapper.sticks.num_groups++]=new CCHBindGroup(joyno,joyno);
@@ -2278,11 +2279,22 @@ static void CreateBindGroups(void) {
 		case JOY_2AXIS:
 		default:
 			mapper.sticks.stick[mapper.sticks.num_groups++]=new CStickBindGroup(joyno,joyno);
+#ifdef HW_RVL
+			mapper.sticks.stick[mapper.sticks.num_groups++]=new CStickBindGroup(4,joyno);
+			if((joyno+1U) < mapper.sticks.num) {
+				mapper.sticks.stick[mapper.sticks.num_groups++]=new CStickBindGroup(1,joyno+1U);
+				mapper.sticks.stick[mapper.sticks.num_groups++]=new CStickBindGroup(5,joyno+1U);
+			} else {
+				new CStickBindGroup(1,joyno+1U,true);
+				new CStickBindGroup(5,joyno+1U,true);
+			}
+#else
 			if((joyno+1U) < mapper.sticks.num) {
 				mapper.sticks.stick[mapper.sticks.num_groups++]=new CStickBindGroup(joyno+1U,joyno+1U);
 			} else {
 				new CStickBindGroup(joyno+1U,joyno+1U,true);
 			}
+#endif
 			break;
 		}
 	}
@@ -2380,6 +2392,7 @@ void MAPPER_Init(void) {
 		}
 	}
 }
+
 //Somehow including them at the top conflicts with something in setup.h
 #ifdef C_X11_XKB
 #include "SDL_syswm.h"

@@ -32,6 +32,10 @@
 #include "control.h"
 #include "shell.h"
 
+#ifdef HW_RVL
+extern void SaveConfig(bool pressed);
+#endif
+
 Bitu call_program;
 
 /* This registers a file on the virtual drive and creates the correct structure for it*/
@@ -66,8 +70,6 @@ void PROGRAMS_MakeFile(char const * const name,PROGRAMS_Main * main) {
 	Bit32u size=sizeof(exe_block)+sizeof(index);	
 	VFILE_Register(name,comdata,size);	
 }
-
-
 
 static Bitu PROGRAMS_Handler(void) {
 	/* This sets up everything for a program start up call */
@@ -250,6 +252,9 @@ void restart_program(std::vector<std::string> & parameters);
 class CONFIG : public Program {
 public:
 	void Run(void);
+#ifdef HW_RVL
+	void Write();
+#endif
 private:
 	void restart(const char* useconfig);
 	
@@ -275,6 +280,8 @@ private:
 		return false;
 	}
 };
+
+
 
 void CONFIG::Run(void) {
 	static const char* const params[] = {
@@ -749,6 +756,19 @@ static void CONFIG_ProgramStart(Program * * make) {
 	*make=new CONFIG;
 }
 
+#ifdef HW_RVL
+void CONFIG::Write(void) {
+	writeconf(control->configfiles[0], false);
+}
+
+void SaveConfig(bool pressed) {
+	if (!pressed)
+		return;
+
+	CONFIG config;
+	config.Write();
+} 
+#endif
 
 void PROGRAMS_Init(Section* /*sec*/) {
 	/* Setup a special callback to start virtual programs */

@@ -37,6 +37,10 @@
 
 Bitu DEBUG_EnableDebugger(void);
 extern void GFX_SetTitle(Bit32s cycles ,Bits frameskip,bool paused);
+#ifdef HW_RVL
+extern void CPU_CycleDecrease(bool pressed);
+extern void CPU_CycleIncrease(bool pressed);
+#endif
 
 #if 1
 #undef LOG
@@ -2101,8 +2105,11 @@ void CPU_ENTER(bool use32,Bitu bytes,Bitu level) {
 	sp_index-=bytes;
 	reg_esp=(reg_esp&cpu.stack.notmask)|((sp_index)&cpu.stack.mask);
 }
-
+#ifdef HW_RVL
+void CPU_CycleIncrease(bool pressed) {
+#else
 static void CPU_CycleIncrease(bool pressed) {
+#endif
 	if (!pressed) return;
 	if (CPU_CycleAutoAdjust) {
 		CPU_CyclePercUsed+=5;
@@ -2126,8 +2133,11 @@ static void CPU_CycleIncrease(bool pressed) {
 		GFX_SetTitle(CPU_CycleMax,-1,false);
 	}
 }
-
+#ifdef HW_RVL
+void CPU_CycleDecrease(bool pressed) {
+#else
 static void CPU_CycleDecrease(bool pressed) {
+#endif
 	if (!pressed) return;
 	if (CPU_CycleAutoAdjust) {
 		CPU_CyclePercUsed-=5;

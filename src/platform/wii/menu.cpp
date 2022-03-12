@@ -19,18 +19,40 @@
 #include "libwiigui/gui.h"
 #include "wiihardware.h"
 
+#include "cpu.h"
+
 #define THREAD_SLEEP 100
 #define APPVERSION 		"1.7"
 
 static GuiImageData * pointer[4];
 static GuiWindow * mainWindow = NULL;
 static GuiButton * logoBtn = NULL;
+static GuiText * cycleText = NULL;
+static GuiText * fskipText = NULL;
+static GuiText * filterBtnTxt = NULL;
 
 static lwp_t guithread = LWP_THREAD_NULL;
 static lwp_t creditsthread = LWP_THREAD_NULL;
 static bool guiHalt = true;
 static bool ExitRequested = false;
 static bool creditsOpen = false;
+
+int option=0;
+bool savecfg=false;
+extern int CyclesDisplay;
+extern int FrameskipDisplay;
+extern Bit32s CPU_CycleUp;
+extern Bit32s CPU_CycleDown;
+extern char filterTxt[15];
+int cyclez;
+int fskip;
+
+void SaveConfig(bool pressed);
+void CPU_CycleDecrease(bool pressed);
+void CPU_CycleIncrease(bool pressed);
+void IncreaseFrameSkip(bool pressed);
+void DecreaseFrameSkip(bool pressed);
+void ChangeScaler(bool pressed);
 
 /****************************************************************************
  * UpdateGUI
@@ -79,6 +101,11 @@ static void * UpdateGUI (void *arg)
 			ShutoffRumble();
 			VIDEO_SetBlack(TRUE);
 			VIDEO_Flush();
+
+			// Save dosbox .cfg file
+			if(savecfg)
+				SaveConfig(true);
+
 			throw(0);
 		}
 		usleep(THREAD_SLEEP);
@@ -305,12 +332,106 @@ static void DisplayCredits(void * ptr)
 }
 
 /****************************************************************************
+ * CpuCycleUpdate
+ *
+ * Increase or decrease CPU cycles.
+ ***************************************************************************/
+static void CpuCycleUpdate(void * ptr, bool increase)
+{
+	GuiButton * b = (GuiButton *)ptr;
+	if(b->GetState() == STATE_CLICKED)
+	{
+		char cycleTxt[10];
+
+		if(increase)
+		{
+			if (CPU_CycleUp < 100) 
+			{
+				cyclez = (Bit32s)(CyclesDisplay * (1 + (float)CPU_CycleUp / 100.0));
+			} 
+			else
+			{
+				cyclez = (Bit32s)(CyclesDisplay + CPU_CycleUp);
+			}
+
+			sprintf(cycleTxt, "%d",cyclez);
+			cycleText->SetText(cycleTxt);
+			CPU_CycleIncrease(true);
+		}
+		else
+		{
+			if (CPU_CycleDown < 100) 
+			{
+				cyclez = (Bit32s)(CyclesDisplay / (1 + (float)CPU_CycleDown / 100.0));
+			} 
+			else 
+			{
+				cyclez = (Bit32s)(CyclesDisplay - CPU_CycleDown);
+			}
+
+			sprintf(cycleTxt, "%d",cyclez);
+			cycleText->SetText(cycleTxt);
+			CPU_CycleDecrease(true);
+		}
+		CyclesDisplay=cyclez;
+		b->ResetState();
+		option=2;
+	}
+}
+
+/****************************************************************************
+ * RenderFskipUpdate
+ *
+ * Increase or decrease frameskip.
+ ***************************************************************************/
+static void RenderFskipUpdate(void * ptr, bool increase)
+{
+	GuiButton * b = (GuiButton *)ptr;
+	if(b->GetState() == STATE_CLICKED)
+	{
+		char fskipTxt[10];
+
+		if(fskip < 0)
+			fskip=0;
+
+		if(increase)
+		{
+			fskip=FrameskipDisplay;
+			fskip++;
+			sprintf(fskipTxt, "%d",fskip);
+			fskipText->SetText(fskipTxt);
+			IncreaseFrameSkip(true);
+		}
+		else
+		{
+			fskip=FrameskipDisplay;
+			fskip--;
+			if(fskip < 0)
+				fskip=0;
+			sprintf(fskipTxt, "%d",fskip);
+			fskipText->SetText(fskipTxt);
+			DecreaseFrameSkip(true);
+		}
+
+		FrameskipDisplay=fskip;
+		b->ResetState();
+		option=2;
+	}
+}
+
+static void CpuCycleDecrease(void * ptr) { CpuCycleUpdate(ptr, false); }
+static void CpuCycleIncrease(void * ptr) { CpuCycleUpdate(ptr, true); }
+
+static void RenderFskipDecrease(void * ptr) { RenderFskipUpdate(ptr, false); }
+static void RenderFskipIncrease(void * ptr) { RenderFskipUpdate(ptr, true); }
+
+/****************************************************************************
  * HomeMenu
  ***************************************************************************/
 void HomeMenu ()
 {
 	ResetVideo_Menu();
-	
+
 	pointer[0] = new GuiImageData(player1_point_png);
 	pointer[1] = new GuiImageData(player2_point_png);
 	pointer[2] = new GuiImageData(player3_point_png);
@@ -366,12 +487,110 @@ void HomeMenu ()
 	logoBtn->SetTrigger(&trigA);
 	logoBtn->SetUpdateCallback(DisplayCredits);
 
+	char CyclesTxt[15];
+	char FskipTxt[15];
+	sprintf(CyclesTxt, "%d", CyclesDisplay);
+	sprintf(FskipTxt, "%d", FrameskipDisplay);
+
+	cycleText = new GuiText(NULL, 20, (GXColor){255, 255, 255, 255});
+	cycleText->SetText(CyclesTxt);
+	cycleText->SetPosition(-215, -180);
+
+	fskipText = new GuiText(NULL, 20, (GXColor){255, 255, 255, 255});
+	fskipText->SetText(FskipTxt);
+	fskipText->SetPosition(-45, -180);
+
+	GuiText cycleDecBtnTxt("-", 24, (GXColor){0, 0, 0, 255});
+	GuiImageData cycleDec(keyboard_key_png);
+	GuiImage cycleDecImg(&cycleDec);
+	GuiImageData cycleDecOver(keyboard_key_over_png);
+	GuiImage cycleDecOverImg(&cycleDecOver);
+	GuiButton cycleDecBtn(cycleDec.GetWidth(), cycleDec.GetHeight());
+	cycleDecBtn.SetImage(&cycleDecImg);
+	cycleDecBtn.SetImageOver(&cycleDecOverImg);
+	cycleDecBtn.SetAlignment(ALIGN_CENTRE, ALIGN_MIDDLE);
+	cycleDecBtn.SetPosition(-270, -180);
+	cycleDecBtn.SetLabel(&cycleDecBtnTxt);
+	cycleDecBtn.SetTrigger(&trigA);
+	cycleDecBtn.SetUpdateCallback(CpuCycleDecrease);
+
+	GuiText cycleIncBtnTxt("+", 24, (GXColor){0, 0, 0, 255});
+	GuiImageData cycleInc(keyboard_key_png);
+	GuiImage cycleIncImg(&cycleInc);
+	GuiImageData cycleIncOver(keyboard_key_over_png);
+	GuiImage cycleIncOverImg(&cycleIncOver);
+	GuiButton cycleIncBtn(cycleInc.GetWidth(), cycleInc.GetHeight());
+	cycleIncBtn.SetImage(&cycleIncImg);
+	cycleIncBtn.SetImageOver(&cycleIncOverImg);
+	cycleIncBtn.SetAlignment(ALIGN_CENTRE, ALIGN_MIDDLE);
+	cycleIncBtn.SetPosition(-160, -180);
+	cycleIncBtn.SetLabel(&cycleIncBtnTxt);
+	cycleIncBtn.SetTrigger(&trigA);
+	cycleIncBtn.SetUpdateCallback(CpuCycleIncrease);
+
+	GuiText fskipDecBtnTxt("-", 24, (GXColor){0, 0, 0, 255});
+	GuiImageData fskipDec(keyboard_key_png);
+	GuiImage fskipDecImg(&fskipDec);
+	GuiImageData fskipDecOver(keyboard_key_over_png);
+	GuiImage fskipDecOverImg(&fskipDecOver);
+	GuiButton fskipDecBtn(fskipDec.GetWidth(), fskipDec.GetHeight());
+	fskipDecBtn.SetImage(&fskipDecImg);
+	fskipDecBtn.SetImageOver(&fskipDecOverImg);
+	fskipDecBtn.SetAlignment(ALIGN_CENTRE, ALIGN_MIDDLE);
+	fskipDecBtn.SetPosition(-80, -180);
+	fskipDecBtn.SetLabel(&fskipDecBtnTxt);
+	fskipDecBtn.SetTrigger(&trigA);
+	fskipDecBtn.SetUpdateCallback(RenderFskipDecrease);
+
+	GuiText fskipIncBtnTxt("+", 24, (GXColor){0, 0, 0, 255});
+	GuiImageData fskipInc(keyboard_key_png);
+	GuiImage fskipIncImg(&fskipInc);
+	GuiImageData fskipIncOver(keyboard_key_over_png);
+	GuiImage fskipIncOverImg(&fskipIncOver);
+	GuiButton fskipIncBtn(fskipInc.GetWidth(), fskipInc.GetHeight());
+	fskipIncBtn.SetImage(&fskipIncImg);
+	fskipIncBtn.SetImageOver(&fskipIncOverImg);
+	fskipIncBtn.SetAlignment(ALIGN_CENTRE, ALIGN_MIDDLE);
+	fskipIncBtn.SetPosition(0, -180);
+	fskipIncBtn.SetLabel(&fskipIncBtnTxt);
+	fskipIncBtn.SetTrigger(&trigA);
+	fskipIncBtn.SetUpdateCallback(RenderFskipIncrease);
+
+	filterBtnTxt = new GuiText(NULL, 20, (GXColor){255, 255, 255, 255});
+	filterBtnTxt->SetText(filterTxt);
+	filterBtnTxt->SetAlignment(ALIGN_CENTRE, ALIGN_BOTTOM);
+	GuiImageData filter(tv_png);
+	GuiImage filterImg(&filter);
+	GuiImageData filterOver(tv_over_png);
+	GuiImage filterOverImg(&filterOver);
+	GuiButton filterBtn(filter.GetWidth(), filter.GetHeight());
+	filterBtn.SetImage(&filterImg);
+	filterBtn.SetImageOver(&filterOverImg);
+	filterBtn.SetAlignment(ALIGN_CENTRE, ALIGN_MIDDLE);
+	filterBtn.SetPosition(80, -180);
+	filterBtn.SetLabel(filterBtnTxt);
+	filterBtn.SetTrigger(&trigA);
+
+	GuiText remapBtnTxt("Mapper", 24, (GXColor){0, 0, 0, 255});
+	GuiImage remapBtnImg(&btnLargeOutline);
+	GuiImage remapBtnImgOver(&btnLargeOutlineOver);
+	GuiButton remapBtn(btnLargeOutline.GetWidth(), btnLargeOutline.GetHeight());
+	remapBtn.SetAlignment(ALIGN_CENTRE, ALIGN_TOP);
+	remapBtn.SetPosition(125, 250);
+	remapBtn.SetLabel(&remapBtnTxt);
+	remapBtn.SetImage(&remapBtnImg);
+	remapBtn.SetImageOver(&remapBtnImgOver);
+	remapBtn.SetSoundOver(&btnSoundOver);
+	remapBtn.SetSoundClick(&btnSoundClick);
+	remapBtn.SetTrigger(&trigA);
+	remapBtn.SetEffectGrow();
+
 	GuiText exitBtnTxt("Exit", 24, (GXColor){0, 0, 0, 255});
 	GuiImage exitBtnImg(&btnLargeOutline);
 	GuiImage exitBtnImgOver(&btnLargeOutlineOver);
 	GuiButton exitBtn(btnLargeOutline.GetWidth(), btnLargeOutline.GetHeight());
 	exitBtn.SetAlignment(ALIGN_CENTRE, ALIGN_TOP);
-	exitBtn.SetPosition(-125, 120);
+	exitBtn.SetPosition(-125, 110);
 	exitBtn.SetLabel(&exitBtnTxt);
 	exitBtn.SetImage(&exitBtnImg);
 	exitBtn.SetImageOver(&exitBtnImgOver);
@@ -385,7 +604,7 @@ void HomeMenu ()
 	GuiImage keyboardBtnImgOver(&btnLargeOutlineOver);
 	GuiButton keyboardBtn(btnLargeOutline.GetWidth(), btnLargeOutline.GetHeight());
 	keyboardBtn.SetAlignment(ALIGN_CENTRE, ALIGN_TOP);
-	keyboardBtn.SetPosition(125, 120);
+	keyboardBtn.SetPosition(125, 110);
 	keyboardBtn.SetLabel(&keyboardBtnTxt);
 	keyboardBtn.SetImage(&keyboardBtnImg);
 	keyboardBtn.SetImageOver(&keyboardBtnImgOver);
@@ -463,6 +682,14 @@ void HomeMenu ()
 	w.Append(logoBtn);
 	w.Append(&closeBtn);
 	w.Append(&exitBtn);
+	w.Append(&remapBtn);
+	w.Append(cycleText);
+	w.Append(fskipText);
+	w.Append(&cycleDecBtn);
+	w.Append(&cycleIncBtn);
+	w.Append(&fskipDecBtn);
+	w.Append(&fskipIncBtn);
+	w.Append(&filterBtn);
 	w.Append(&keyboardBtn);
 	
 	mainWindow->Append(&screenImg);
@@ -554,6 +781,19 @@ void HomeMenu ()
 			if(dosboxCommand[0] != 0)
 				break;
 		}
+		else if(remapBtn.GetState() == STATE_CLICKED)
+		{
+			remapBtn.ResetState();
+			option=1;
+			break;
+		}
+		else if(filterBtn.GetState() == STATE_CLICKED)
+		{
+			filterBtn.ResetState();
+			option=3;
+			filterBtnTxt->SetText(filterTxt);
+			break;
+		}
 	}
 
 	ShutoffRumble();
@@ -580,6 +820,8 @@ void HomeMenu ()
 	delete pointer[1];
 	delete pointer[2];
 	delete pointer[3];
+	delete(cycleText);
+	delete(fskipText);
 
 	mainWindow = NULL;
 

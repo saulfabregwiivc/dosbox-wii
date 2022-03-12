@@ -134,6 +134,16 @@ struct private_hwdata {
 #include <os2.h>
 #endif
 
+#ifdef HW_RVL
+#include "mapper.h"
+extern int option;
+extern bool savecfg;
+int CyclesDisplay;
+int FrameskipDisplay;
+extern char filterTxt[15];
+void ChangeScaler(bool pressed);
+#endif
+
 enum SCREEN_TYPES	{
 	SCREEN_SURFACE,
 	SCREEN_SURFACE_DDRAW,
@@ -149,7 +159,6 @@ enum PRIORITY_LEVELS {
 	PRIORITY_LEVEL_HIGHER,
 	PRIORITY_LEVEL_HIGHEST
 };
-
 
 struct SDL_Block {
 	bool inited;
@@ -245,6 +254,9 @@ void GFX_SetTitle(Bit32s cycles,Bits frameskip,bool paused){
 	} else {
 		sprintf(title,"DOSBox %s, CPU speed: %8d cycles, Frameskip %2d, Program: %8s",VERSION,internal_cycles,internal_frameskip,RunningProgram);
 	}
+
+	CyclesDisplay=internal_cycles;
+	FrameskipDisplay=internal_frameskip;
 
 	if(paused) strcat(title," PAUSED");
 	SDL_WM_SetCaption(title,VERSION);
@@ -578,6 +590,7 @@ dosurface:
 			if (sdl.blit.surface) {
 				SDL_FreeSurface(sdl.blit.surface);
 				sdl.blit.surface=0;
+
 			}
 			LOG_MSG("Failed to create ddraw surface, back to normal surface.");
 			goto dosurface;
@@ -848,6 +861,7 @@ bool GFX_StartUpdate(Bit8u * & pixels,Bitu & pitch) {
 		pitch=sdl.blit.surface->pitch;
 		sdl.updating=true;
 		return true;
+
 #endif
 	case SCREEN_OVERLAY:
 		if (SDL_LockYUVOverlay(sdl.overlay)) return false;
@@ -1346,6 +1360,7 @@ static void GUI_StartUp(Section * sec) {
 		}
 
 		if (use_fadeout) {
+
 			SDL_FillRect(sdl.surface, NULL, SDL_MapRGB(sdl.surface->format, 0, 0, 0));
 			SDL_Flip(sdl.surface);
 		}
@@ -1438,15 +1453,63 @@ bool GFX_IsFullscreen(void) {
 	return sdl.desktop.fullscreen;
 }
 
+#ifdef HW_RVL
+void HandleCfg(void) {
+	Section *sec = NULL;
+	char ScalerTxt[20];
+	char CyclesTxt[15];
+	char frameskipTxt[15];
+
+	sec = control->GetSection("render");
+
+	for(int i = 0; filterTxt[i]; i++)	{
+		filterTxt[i] = tolower(filterTxt[i]);
+	}
+
+	sprintf(ScalerTxt, "scaler=%s", filterTxt);
+	sec->HandleInputline(std::string(ScalerTxt));
+	sprintf(frameskipTxt, "frameskip=%d", FrameskipDisplay);
+	sec->HandleInputline(std::string(frameskipTxt));
+
+	sec = control->GetSection("cpu");
+	sprintf(CyclesTxt, "cycles=%d", CyclesDisplay);
+	sec->HandleInputline(std::string(CyclesTxt));
+
+	// Values have changed, save dosbox .cfg when exiting
+	savecfg=true;
+	option=0;
+}
+#endif
+
 void GFX_Events() {
 #ifdef HW_RVL
 	// check for home button
 	u32 btns;
+	u16 btns_gc;
 	for(int i=0; i<4; i++)
 	{
 		btns = WPAD_ButtonsHeld(i);
-		if((btns & WPAD_BUTTON_HOME) || (btns & WPAD_CLASSIC_BUTTON_HOME))
+		btns_gc = PAD_ButtonsHeld(i);
+		if((btns & WPAD_BUTTON_HOME) || (btns & WPAD_CLASSIC_BUTTON_HOME) || ((btns_gc & PAD_BUTTON_START) && (btns_gc & PAD_TRIGGER_Z)) ) 
 			WiiMenu ();
+		
+		// Call the Mapper
+		if(option == 1)
+		{
+			MAPPER_RunInternal();
+			option=0;
+		}
+		// Change cycles and frameskip
+		else if(option==2)
+		{
+			HandleCfg();
+		}
+		// Change the scaler
+		else if(option==3)
+		{
+			ChangeScaler(true);
+			HandleCfg();
+		}
 	}
 #endif
 
@@ -2057,7 +2120,6 @@ int main(int argc, char* argv[]) {
 				GFX_SwitchFullScreen();
 			}
 		}
-
 		/* Init the keyMapper */
 		MAPPER_Init();
 		if (control->cmdline->FindExist("-startmapper")) MAPPER_RunInternal();
@@ -2071,6 +2133,7 @@ int main(int argc, char* argv[]) {
 	} catch (char * error) {
 #if defined (WIN32)
 		sticky_keys(true);
+
 #endif
 		GFX_ShowMsg("Exit to error: %s",error);
 		fflush(NULL);
@@ -2108,6 +2171,7 @@ int main(int argc, char* argv[]) {
 	WiiFinished();
 #endif
 	SDL_Quit();//Let's hope sdl will quit as well when it catches an exception
+
 	return 0;
 }
 

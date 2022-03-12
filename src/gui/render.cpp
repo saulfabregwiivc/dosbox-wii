@@ -36,8 +36,13 @@
 Render_t render;
 ScalerLineHandler_t RENDER_DrawLine;
 
+#ifdef HW_RVL
+extern void IncreaseFrameSkip(bool pressed);
+extern void DecreaseFrameSkip(bool pressed);
+extern void ChangeScaler(bool pressed);
 static void RENDER_CallBack( GFX_CallBackFunctions_t function );
-
+char filterTxt[15];
+#endif
 static void Check_Palette(void) {
 	/* Clean up any previous changed palette data */
 	if (render.pal.changed) {
@@ -281,14 +286,26 @@ static void RENDER_Reset( void ) {
 		gfx_scalew = 1;
 		gfx_scaleh = 1;
 	}
+#ifdef HW_RVL
+	if (render.scale.size == 3)
+		render.scale.size=1;
+#endif
+
 	if ((dblh && dblw) || (render.scale.forced && !dblh && !dblw)) {
 		/* Initialize always working defaults */
 		if (render.scale.size == 2)
 			simpleBlock = &ScaleNormal2x;
+#if !defined(HW_RVL)
 		else if (render.scale.size == 3)
 			simpleBlock = &ScaleNormal3x;
+
 		else
 			simpleBlock = &ScaleNormal1x;
+#else
+		else if (render.scale.size < 2)
+			simpleBlock = &ScaleNormal1x;
+#endif
+
 		/* Maybe override them */
 #if RENDER_USE_ADVANCED_SCALERS>0
 		switch (render.scale.op) {
@@ -296,20 +313,26 @@ static void RENDER_Reset( void ) {
 		case scalerOpAdvInterp:
 			if (render.scale.size == 2)
 				complexBlock = &ScaleAdvInterp2x;
+#if !defined(HW_RVL)
 			else if (render.scale.size == 3)
 				complexBlock = &ScaleAdvInterp3x;
+#endif
 			break;
 		case scalerOpAdvMame:
 			if (render.scale.size == 2)
 				complexBlock = &ScaleAdvMame2x;
+#if !defined(HW_RVL)
 			else if (render.scale.size == 3)
 				complexBlock = &ScaleAdvMame3x;
+#endif
 			break;
 		case scalerOpHQ:
 			if (render.scale.size == 2)
 				complexBlock = &ScaleHQ2x;
+#if !defined(HW_RVL)
 			else if (render.scale.size == 3)
 				complexBlock = &ScaleHQ3x;
+#endif
 			break;
 		case scalerOpSuperSaI:
 			if (render.scale.size == 2)
@@ -327,20 +350,26 @@ static void RENDER_Reset( void ) {
 		case scalerOpTV:
 			if (render.scale.size == 2)
 				simpleBlock = &ScaleTV2x;
+#if !defined(HW_RVL)
 			else if (render.scale.size == 3)
 				simpleBlock = &ScaleTV3x;
+#endif
 			break;
 		case scalerOpRGB:
 			if (render.scale.size == 2)
 				simpleBlock = &ScaleRGB2x;
+#if !defined(HW_RVL)
 			else if (render.scale.size == 3)
 				simpleBlock = &ScaleRGB3x;
+#endif
 			break;
 		case scalerOpScan:
 			if (render.scale.size == 2)
 				simpleBlock = &ScaleScan2x;
+#if !defined(HW_RVL)
 			else if (render.scale.size == 3)
 				simpleBlock = &ScaleScan3x;
+#endif
 			break;
 		default:
 			break;
@@ -367,11 +396,17 @@ forcenormal:
 		gfx_flags = complexBlock->gfxFlags;
 		xscale = complexBlock->xscale;	
 		yscale = complexBlock->yscale;
+#ifdef HW_RVL
+		sprintf(filterTxt, complexBlock->name);
+#endif
 //		LOG_MSG("Scaler:%s",complexBlock->name);
 	} else {
 		gfx_flags = simpleBlock->gfxFlags;
 		xscale = simpleBlock->xscale;	
 		yscale = simpleBlock->yscale;
+#ifdef HW_RVL
+		sprintf(filterTxt, simpleBlock->name);
+#endif
 //		LOG_MSG("Scaler:%s",simpleBlock->name);
 	}
 	switch (render.src.bpp) {
@@ -535,23 +570,31 @@ void RENDER_SetSize(Bitu width,Bitu height,Bitu bpp,float fps,double ratio,bool 
 }
 
 extern void GFX_SetTitle(Bit32s cycles, Bits frameskip,bool paused);
+#ifdef HW_RVL
+void IncreaseFrameSkip(bool pressed) {
+#else
 static void IncreaseFrameSkip(bool pressed) {
+#endif
 	if (!pressed)
 		return;
 	if (render.frameskip.max<10) render.frameskip.max++;
 	LOG_MSG("Frame Skip at %d",render.frameskip.max);
 	GFX_SetTitle(-1,render.frameskip.max,false);
 }
-
+#ifdef HW_RVL
+void DecreaseFrameSkip(bool pressed) {
+#else
 static void DecreaseFrameSkip(bool pressed) {
+#endif
 	if (!pressed)
 		return;
 	if (render.frameskip.max>0) render.frameskip.max--;
 	LOG_MSG("Frame Skip at %d",render.frameskip.max);
 	GFX_SetTitle(-1,render.frameskip.max,false);
 }
-/* Disabled as I don't want to waste a keybind for that. Might be used in the future (Qbix)
-static void ChangeScaler(bool pressed) {
+ //Disabled as I don't want to waste a keybind for that. Might be used in the future (Qbix)
+//static void ChangeScaler(bool pressed) {
+void ChangeScaler(bool pressed) {
 	if (!pressed)
 		return;
 	render.scale.op = (scalerOperation)((int)render.scale.op+1);
@@ -561,7 +604,7 @@ static void ChangeScaler(bool pressed) {
 			render.scale.size = 1;
 	}
 	RENDER_CallBack( GFX_CallBackReset );
-} */
+} 
 
 void RENDER_Init(Section * sec) {
 	Section_prop * section=static_cast<Section_prop *>(sec);
